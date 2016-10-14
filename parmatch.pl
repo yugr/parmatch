@@ -37,7 +37,6 @@ package Lexer {
     $cur_file = $_[0];
     open FILE, $cur_file or die "unable to open $cur_file";
     @lines = <FILE>;
-    @lines = reverse @lines;
     $cur_line = 1;
   }
   
@@ -65,7 +64,7 @@ package Lexer {
     while(!$line) {
       return undef if(Lexer::done());
   
-      $line = pop @lines;
+      $line = shift @lines;
   
       # Skip whites
       while(1) {
@@ -73,7 +72,7 @@ package Lexer {
         next if($line =~ s/^\/\/.*//);
         if($line =~ /\/\*/) {
           while(!Lexer::done() && $line !~ s/^(.*?)\*\///) {
-            $line = pop @lines;
+            $line = shift @lines;
             ++$cur_line;
           }
           next;
@@ -120,7 +119,7 @@ package Lexer {
     print STDERR "$cur_file:$cur_line: token '$type'" . (defined $info ? " ($info)\n" : "\n") if($debug > 1);
   
     if($line) {
-      push @lines, $line;
+      unshift @lines, $line;
     } else {
       ++$cur_line;
     }
