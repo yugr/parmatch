@@ -8,7 +8,7 @@
 # and warns if some parameters have not been assigned (in a hope
 # that this is a bug).
 #
-# Tool works on a lexer level (i.e. AST is not built) so
+# Tool works at lexing level (i.e. AST is not built) so
 # it may both miss some bugs ("false negative" in CS jargon,
 # "type 1 errors" in math jargon) when parameters are declared
 # outline (either directly or by including parameter list file) and
@@ -191,13 +191,6 @@ sub find_modules() {
     my $mod_name = $mod->{info};
     my $mod_loc = "$mod->{file}:$mod->{line}";
 
-    if(exists $mod2info{$mod_name}) {
-      my $prev = $mod2info{$mod_name};
-      my $mod_loc = "$prev->{tok}->{file}:$prev->{tok}->{line}";
-      # TODO: only warn if signatures are different (and disable from future analysis)
-      Lexer::warn($mod, "redefinition of module '$mod_name' (previously defined in $mod_loc)");
-    }
-
     next if(!maybe_read_param_lparen());
 
     my @par_list = Lexer::read_list();
@@ -225,10 +218,43 @@ sub find_modules() {
       }
     }
 
+    if(exists $mod2info{$mod_name}) {
+      # It's common for single codebase to have
+      # several implementations of same module.
+      # It's fine if their signature match.
+      # If they don't, we warn user and ignore
+      # such module.
+
+      my $prev = $mod2info{$mod_name};
+      my $mod_loc = "$prev->{tok}->{file}:$prev->{tok}->{line}";
+
+      my $prev_npars = @{$prev->{pars}};
+      my $npars = @pars;
+
+      if($prev_npars != $npars) {
+        Lexer::warn($mod, "incompatible redefinition of module '$mod_name': uses $npars parameters (used to be $prev_npars in $mod_loc); the module will be excluded from further analysis");
+        $prev->{ignore} = 1;
+        next;
+      }
+
+      for(my $i = 0; $i < $npars; ++$i) {
+        my $prev_par = $prev->{pars}->[$i];
+        my $par = $pars[$i];
+        if($prev_par ne $par) {
+          Lexer::warn($mod, "incompatible redefinition of module '$mod_name': $i-th parameter is named '$par' (used to be '$prev_par' in $mod_loc); the module will be excluded from further analysis");
+          $prev->{ignore} = 1;
+          last;
+        }
+      }
+
+      next if($prev->{ignore});
+    }
+
     $mod2info{$mod_name} = {
       pars => \@pars,
       tok => $mod,
-      pars_hash => \%pars_hash
+      pars_hash => \%pars_hash,
+      ignore => 0
     };
   }
 }
@@ -238,6 +264,7 @@ sub check_insts() {
   print "Scanning $File::Find::name for module instantiations...\n";
   Lexer::init($_);
   while(!Lexer::done()) {
+    # TODO: only consider insts at "normal" locations
     my $l = Lexer::tok();
     next if(!defined $l || !defined $l->{type});
 
@@ -269,6 +296,8 @@ sub check_insts() {
     }
 
     my $mod_info = $mod2info{$name};
+    next if($mod_info->{ignore});
+
     my $mod_pars = $mod_info->{pars};
     my $mod_loc = "$mod_info->{tok}->{file}:$mod_info->{tok}->{line}";
 

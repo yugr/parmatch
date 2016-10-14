@@ -1,0 +1,2 @@
+warning: tests/test4/test4.v:13: incompatible redefinition of module 'M2': uses 1 parameters (used to be 2 in tests/test4/test4.v:10); the module will be excluded from further analysis
+warning: tests/test4/test4.v:22: incompatible redefinition of module 'M3': 1-th parameter is named 'C' (used to be 'B' in tests/test4/test4.v:19); the module will be excluded from further analysis
