@@ -1,6 +1,6 @@
 Scanning tests/test1/test1.v for module definitions...
 Scanning tests/test1/test1.v for module instantiations...
-test1.v:4: parameter 'A' not assigned in instantiation of module 'MOD1' (defined at test1.v:1)
-test1.v:4: parameter 'B' not assigned in instantiation of module 'MOD1' (defined at test1.v:1)
-test1.v:5: parameter 'B' not assigned in instantiation of module 'MOD1' (defined at test1.v:1)
-test1.v:7: parameter 'B' not assigned in instantiation of module 'MOD1' (defined at test1.v:1)
+tests/test1/test1.v:4: parameter 'A' not assigned in instantiation of module 'MOD1' (defined at tests/test1/test1.v:1)
+tests/test1/test1.v:4: parameter 'B' not assigned in instantiation of module 'MOD1' (defined at tests/test1/test1.v:1)
+tests/test1/test1.v:5: parameter 'B' not assigned in instantiation of module 'MOD1' (defined at tests/test1/test1.v:1)
+tests/test1/test1.v:7: parameter 'B' not assigned in instantiation of module 'MOD1' (defined at tests/test1/test1.v:1)
