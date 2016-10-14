@@ -27,7 +27,6 @@ use Getopt::Long qw(GetOptions);
 use Data::Dumper;
 
 my $debug = 0;
-my $verbose = 0;
 
 package Lexer {
   my @lines;
@@ -259,23 +258,35 @@ sub find_modules() {
   }
 }
 
+sub can_expect_mod_inst($) {
+  return ($_[0]->{type} eq 'keyword' && !is_module_tok($_[0]))
+    || $_[0]->{type} eq ';';
+}
+
+my $verbose = 0;
+my $aggress = 0;
+
 sub check_insts() {
   return if (!is_verilog_file($File::Find::name));
   print "Scanning $File::Find::name for module instantiations...\n";
   Lexer::init($_);
+
+  my $check_mod_inst = 1;
   while(!Lexer::done()) {
     # TODO: only consider insts at "normal" locations
     my $l = Lexer::tok();
     next if(!defined $l || !defined $l->{type});
 
-    my $name = $l->{info};
-    my $loc = "$l->{file}:$l->{line}";
-
-    # Skip module defs
-    if(is_module_tok($l)) {
-      Lexer::tok();
+    # Do not check for insts in bad contexts
+    if(!$aggress && !$check_mod_inst) {
+      $check_mod_inst = can_expect_mod_inst($l);
       next;
     }
+
+    $check_mod_inst = can_expect_mod_inst($l);
+
+    my $name = $l->{info};
+    my $loc = "$l->{file}:$l->{line}";
 
     # Skip unknown modules
     next if($l->{type} ne 'id' || !exists $mod2info{$name});
@@ -335,9 +346,10 @@ my $help = 0;
 
 # TODO: add more options: ignore file (with wildcards and (???) regex), etc.
 GetOptions(
-  'help'     => \$help,
-  'debug+'   => \$debug,
-  'verbose+' => \$verbose
+  'help'            => \$help,
+  'debug+'          => \$debug,
+  'verbose+'        => \$verbose,
+  'agressive-check' => $aggress
 );
 
 if($help) {
@@ -350,6 +362,8 @@ Verilog module instantiations.
 OPT can be one of
   --help
   --debug
+  --verbose
+  --agressive-check  (only for testing!)
 EOF
   exit(0);
 }
