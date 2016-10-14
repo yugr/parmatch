@@ -1,5 +1,7 @@
 #!/bin/sh -e
 
+cd `dirname $0`
+
 fail=0
 for d in tests/*; do
   if test -d $d; then
