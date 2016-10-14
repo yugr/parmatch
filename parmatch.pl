@@ -1,5 +1,24 @@
 #!/usr/bin/perl
 
+# This is a simple tool which scans all .v files in a folder
+# for module definitions
+#   module M #(P1, P2, ...) ...
+# and module instantiations:
+#   M #(.P1(V1), .P2(V2), ...) ...
+# and warns if some parameters have not been assigned (in a hope
+# that this is a bug).
+#
+# Tool works on a lexer level (i.e. AST is not built) so
+# it may both miss some bugs ("false negative" in CS jargon,
+# "type 1 errors" in math jargon) when parameters are declared
+# outline (either directly or by including parameter list file) and
+# report invalid warnings ("false positives", "type 2 errors") when
+# parameters are assigned using defparam. It also totally ignores
+# preprocessor directives.
+#
+# It's possible to fix above limitations but hopefully it's not necessary
+# as outline parameters and defparams are bad and rare coding practices.
+
 use strict;
 use warnings;
 
