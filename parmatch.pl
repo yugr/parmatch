@@ -27,6 +27,7 @@ use Getopt::Long qw(GetOptions);
 use Data::Dumper;
 
 my $debug = 0;
+my $verbose = 0;
 
 package Lexer {
   my @lines;
@@ -44,15 +45,9 @@ package Lexer {
     return $#lines < 0;
   }
   
-  sub warn($;$) {
-    # TODO: avoid dups
-    my $file = $cur_file;
-    my $line = $cur_line;
-    if($#_ > 0) {
-      $file = $_[1]->{file};
-      $line = $_[1]->{line};
-    }
-    print STDERR "warning: $file:$line: $_[0]\n";
+  sub warn($$) {
+    # TODO: avoid dups?
+    print STDERR "warning: $_[0]->{file}:$_[0]->{line}: $_[1]\n";
   }
   
   sub tok();  # To make compiler happy...
@@ -70,7 +65,8 @@ package Lexer {
       while(1) {
         next if($line =~ s/^[\s\r\n]+//m);
         next if($line =~ s/^\/\/.*//);
-        if($line =~ /\/\*/) {
+        next if($line =~ s/^\\$//);
+        if($line =~ /^\/\*/) {
           while(!Lexer::done() && $line !~ s/^(.*?)\*\///) {
             $line = shift @lines;
             ++$cur_line;
@@ -113,7 +109,7 @@ package Lexer {
       $info = $1;
       $type = 'macro';
     } else {
-      Lexer::warn("failed to recognize token '$line'");
+      Lexer::warn({ line => $cur_line, file => $cur_file }, "failed to recognize token '$line'");
       $line = '';
     }
     print STDERR "$cur_file:$cur_line: token '$type'" . (defined $info ? " ($info)\n" : "\n") if($debug > 1);
@@ -162,8 +158,25 @@ package Lexer {
 my %mod2info;
 
 sub is_verilog_file($) {
-  # TODO: check other common exts with Sam
   $_[0] =~ /\.(v|sv|vh|svh|ver)$/i;
+}
+
+sub is_module_tok($) {
+  my $l = $_[0];
+  return defined $l
+    && defined $l->{type}
+    && $l->{type} eq 'keyword'
+    && $l->{info} eq 'module';
+}
+
+sub maybe_read_param_lparen() {
+  my $tok = Lexer::tok();
+  return 0 if(!defined $tok || !defined $tok->{type} || $tok->{type} ne '#');
+
+  $tok = Lexer::tok();
+  return 0 if(!defined $tok || !defined $tok->{type} || $tok->{type} ne '(');
+
+  return 1;
 }
 
 sub find_modules() {
@@ -172,8 +185,7 @@ sub find_modules() {
   Lexer::init($_);
   while(!Lexer::done()) {
     my $l = Lexer::tok();
-    last if(!defined $l);
-    next if(!defined $l->{type} || $l->{type} ne 'keyword' || $l->{info} ne 'module');
+    next if(!is_module_tok($l));
 
     my $mod = Lexer::tok();
     my $mod_name = $mod->{info};
@@ -182,14 +194,11 @@ sub find_modules() {
     if(exists $mod2info{$mod_name}) {
       my $prev = $mod2info{$mod_name};
       my $mod_loc = "$prev->{tok}->{file}:$prev->{tok}->{line}";
-      Lexer::warn("redefinition of module '$mod_name' (previously defined in $mod_loc)", $mod);
+      # TODO: only warn if signatures are different (and disable from future analysis)
+      Lexer::warn($mod, "redefinition of module '$mod_name' (previously defined in $mod_loc)");
     }
 
-    my $maybe_hash = Lexer::tok();
-    next if($maybe_hash->{type} ne '#');
-
-    my $lparen = Lexer::tok();
-    next if($lparen->{type} ne '(');
+    next if(!maybe_read_param_lparen());
 
     my @par_list = Lexer::read_list();
     print STDERR "$mod_loc: find_modules: module params:\n" . Dumper(@par_list) if($debug);
@@ -209,7 +218,7 @@ sub find_modules() {
       }
       push @pars, $par;
       if(!defined $par) {
-        Lexer::warn("failed to parse $#pars-th parameter of module '$mod_name'", $mod);
+        Lexer::warn($mod, "failed to parse $#pars-th parameter of module '$mod_name'");
       } else {
         $pars_hash{$par} = 1;
         print STDERR "$mod_loc: $#pars-th parameter: " . Dumper($par) if($debug);
@@ -236,7 +245,7 @@ sub check_insts() {
     my $loc = "$l->{file}:$l->{line}";
 
     # Skip module defs
-    if($l->{type} eq 'keyword' && $name eq 'module') {
+    if(is_module_tok($l)) {
       Lexer::tok();
       next;
     }
@@ -246,9 +255,7 @@ sub check_insts() {
 
     my @pars;
 
-    my $maybe_hash = Lexer::tok();
-    my $maybe_lparen = Lexer::tok();
-    if($maybe_hash->{type} eq '#' && $maybe_lparen->{type} eq '(') {
+    if(maybe_read_param_lparen()) {
       my @par_list = Lexer::read_list();
       print STDERR "$loc: '$name' instantiation parsed params:\n" . Dumper(@par_list) if($debug);
 
@@ -266,12 +273,12 @@ sub check_insts() {
     my $mod_loc = "$mod_info->{tok}->{file}:$mod_info->{tok}->{line}";
 
     if(scalar @pars > scalar @$mod_pars) {
-      Lexer::warn(sprintf("no. of instantiation parameters (%d) > no. of defined parameters (%d) in module '$name' (defined at $mod_loc)", scalar @pars, scalar @$mod_pars), $l);
+      Lexer::warn($l, sprintf("no. of instantiation parameters (%d) > no. of defined parameters (%d) in module '$name' (defined at $mod_loc)", scalar @pars, scalar @$mod_pars)) if(!$verbose);
       next;
     }
 
     my %binds;
-    for(my $i = 0; $i <= $#pars; ++$i) {
+    for(my $i = 0; $i < @pars; ++$i) {
       my $par = $pars[$i];
       if(!defined $par) {
         # Positional param
@@ -280,11 +287,13 @@ sub check_insts() {
         # Named param
         $binds{$par} = 1;
         if(!exists $mod_info->{pars_hash}->{$par}) {
-          Lexer::warn("named parameter '$par' missing in module '$name' (defined at $mod_loc)", $l);
+          # See above warning.
+          Lexer::warn($l, "named parameter '$par' missing in module '$name' (defined at $mod_loc)") if(!$verbose);
         }
       }
     }
 
+    # TODO: cumulated report for all params
     foreach my $par (@$mod_pars) {
       if(!exists $binds{$par}) {
         print "$loc: parameter '$par' not assigned in instantiation of module '$name' (defined at $mod_loc)\n";
@@ -297,8 +306,9 @@ my $help = 0;
 
 # TODO: add more options: ignore file (with wildcards and (???) regex), etc.
 GetOptions(
-  help     => \$help,
-  'debug+' => \$debug
+  'help'     => \$help,
+  'debug+'   => \$debug,
+  'verbose+' => \$verbose
 );
 
 if($help) {
@@ -322,8 +332,8 @@ if($#ARGV < 0) {
 
 my @roots = @ARGV;
 
-find(\&find_modules, @roots);
-find(\&check_insts, @roots);
+find({ wanted => \&find_modules, no_chdir => 1 }, @roots);
+find({ wanted => \&check_insts, no_chdir => 1 }, @roots);
 
 # TODO: print summary?
 
