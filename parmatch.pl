@@ -67,7 +67,7 @@ package Lexer {
         next if($line =~ s/^\/\/.*//);
         next if($line =~ s/^\\$//);
         if($line =~ /^\/\*/) {
-          while(!Lexer::done() && $line !~ s/^(.*?)\*\///) {
+          while($line !~ s/^(.*?)\*\/// && !done()) {
             $line = shift @lines;
             ++$cur_line;
           }

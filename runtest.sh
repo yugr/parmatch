@@ -7,6 +7,7 @@ for d in tests/*; do
   if test -d $d; then
     out=$d.out
     err=$d.err
+    echo "Testing $d..."
     tmp=$(mktemp)
     ./parmatch.pl $d >$tmp.out 2>$tmp.err
     if ! diff -q $d/out.txt $tmp.out; then
