@@ -90,10 +90,13 @@ package Lexer {
     # Useful ref: http://www.verilog.com/VerilogBNF.html
     if($line =~ s/^([a-zA-Z_\$.][a-zA-Z_\$.\d]*)//) {
       $info = $1;
-      $type = $info =~ /^(begin|end|(end)?(module|case)|type|parameter|localparam|real|integer|logic|wire|reg|assign|(pos|neg)edge|generate)$/ ? 'keyword'
+      $type = $info =~ /^(begin|end|(end)?(module|case|generate)|type|parameter|localparam|real|integer|logic|wire|reg|assign|(pos|neg)edge)$/ ? 'keyword'
               : $info =~ /^\./ ? 'param_bind'
               : 'id';
       $info =~ s/^\.//;
+    } elsif($line =~ s/^\\(\S+)\s//) {  # Escaped id
+      $info = $1;
+      $type = 'id';
     } elsif($line =~ s/^([0-9'][0-9'bodhxzXZ_.]*)//) {
       $info = $1;
       $type = 'number';
@@ -102,8 +105,9 @@ package Lexer {
       $type = 'delay';
     } elsif($line =~ s/^(<=|>=|&&|\|\||[;,#(){}=?:!<>~|&^+\-*%@\/\[\]])//) {
       $type = $1;
-    } elsif($line =~ s/"([^"]*)"//) {
+    } elsif($line =~ s/"((?:\\"|[^"])*)"//) {
       $info = $1;
+      $info =~ s/\\"/"/g;
       $type = 'string';
     } elsif($line =~ s/`([a-zA-Z_0-9]+)//) {
       $info = $1;
@@ -252,6 +256,7 @@ sub find_modules() {
         my $prev_par = $prev->{pars}->[$i];
         my $par = $pars[$i];
         if($prev_par ne $par) {
+          # TODO: we can at least check common part of the interface
           Lexer::warn($mod, "incompatible redefinition of module '$mod_name': $i-th parameter is named '$par' (used to be '$prev_par' in $mod_loc); the module will be excluded from further analysis");
           $prev->{ignore} = 1;
           last;
@@ -286,12 +291,10 @@ sub check_insts() {
 
   my $check_mod_inst = 1;
   while(!Lexer::done()) {
-    # TODO: only consider insts at "normal" locations
     my $l = Lexer::tok();
     next if(!defined $l || !defined $l->{type});
 
     # Do not check for insts in bad contexts
-    # TODO: check that we don't loose anything useful compared to agressive mode
     if(!$aggress && !$check_mod_inst) {
       $check_mod_inst = can_expect_mod_inst($l);
       next;
