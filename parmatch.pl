@@ -90,7 +90,7 @@ package Lexer {
     # Useful ref: http://www.verilog.com/VerilogBNF.html
     if($line =~ s/^([a-zA-Z_\$.][a-zA-Z_\$.\d]*)//) {
       $info = $1;
-      $type = $info =~ /^(begin|end|(end)?(module|case)|type|parameter|localparam|real|integer|logic|wire|reg|assign|(pos|neg)edge)$/ ? 'keyword'
+      $type = $info =~ /^(begin|end|(end)?(module|case)|type|parameter|localparam|real|integer|logic|wire|reg|assign|(pos|neg)edge|generate)$/ ? 'keyword'
               : $info =~ /^\./ ? 'param_bind'
               : 'id';
       $info =~ s/^\.//;
@@ -271,7 +271,7 @@ sub find_modules() {
 }
 
 sub can_expect_mod_inst($) {
-  return ($_[0]->{type} eq 'keyword' && $_[0]->{info} =~ /begin|end/)
+  return ($_[0]->{type} eq 'keyword' && $_[0]->{info} =~ /begin|end|generate/)
     || $_[0]->{type} eq ';';
 }
 
