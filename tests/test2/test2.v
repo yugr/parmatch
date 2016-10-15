@@ -1,4 +1,4 @@
-module spram_32 #(parameter aw, dw) (x);
+module spram_32 #(parameter aw, parameter dw) (x);
 endmodule
 
    spram_32 #

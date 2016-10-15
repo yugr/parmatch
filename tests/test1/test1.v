@@ -1,4 +1,4 @@
-module MOD1 #(parameter A, B) ();
+module MOD1 #(parameter A, parameter B) ();
 endmodule
 
 MOD1 inst1;
