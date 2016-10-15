@@ -37,6 +37,7 @@ package Lexer {
     $cur_file = $_[0];
     open FILE, $cur_file or die "unable to open $cur_file";
     @lines = <FILE>;
+    close FILE;
     $cur_line = 1;
   }
   
@@ -178,8 +179,19 @@ sub maybe_read_param_lparen() {
   return 1;
 }
 
+my @excludes;
+
+sub is_excluded($) {
+  my $file = $_[0];
+  foreach(@excludes) {
+    return 1 if($file =~ /$_/);
+  }
+  return 0;
+}
+
 sub find_modules() {
   return if (!is_verilog_file($File::Find::name));
+  return if (is_excluded($File::Find::name));
   print "Scanning $File::Find::name for module definitions...\n";
   Lexer::init($_);
   while(!Lexer::done()) {
@@ -268,6 +280,7 @@ my $aggress = 0;
 
 sub check_insts() {
   return if (!is_verilog_file($File::Find::name));
+  return if (is_excluded($File::Find::name));
   print "Scanning $File::Find::name for module instantiations...\n";
   Lexer::init($_);
 
@@ -343,12 +356,14 @@ sub check_insts() {
 }
 
 my $help = 0;
+my @exclude_files;
 
-# TODO: add more options: ignore file (with wildcards and (???) regex), etc.
 GetOptions(
   'help'            => \$help,
-  'debug+'          => \$debug,
   'verbose+'        => \$verbose,
+  'exclude=s@'      => \@excludes,
+  'exclude-file=s@' => \@exclude_files,
+  'debug+'          => \$debug,
   'agressive-check' => $aggress
 );
 
@@ -360,10 +375,15 @@ A sloppy script for finding unbound parameters in
 Verilog module instantiations.
 
 OPT can be one of
-  --help
+  --help                     Print this help and exit.
+  --verbose                  Show more warning.
+  --exclude=GLOB             Exclude files whose names match wildcard.
+  --exclude-file=GLOB_FILE   Exclude files whose names match patterns
+                             in file.
+
+Internal options (only for testing!):
   --debug
-  --verbose
-  --agressive-check  (only for testing!)
+  --agressive-check
 EOF
   exit(0);
 }
@@ -374,6 +394,17 @@ if($#ARGV < 0) {
 }
 
 my @roots = @ARGV;
+
+foreach my $f (@exclude_files) {
+  open FILE, $f or die "unable to open exclude file $f";
+  while(<FILE>) {
+    push @excludes, $_;
+  }
+  close FILE;
+}
+
+# Poor man's wildcards...
+@excludes = map { s/\*/.*/g; s/\./\\./; s/\?/./; $_ } @excludes;
 
 find({ wanted => \&find_modules, no_chdir => 1 }, @roots);
 find({ wanted => \&check_insts, no_chdir => 1 }, @roots);
