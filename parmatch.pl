@@ -32,7 +32,7 @@ package Lexer {
   my @lines;
   my $cur_file;
   my $cur_line;
-  
+
   sub init($) {
     $cur_file = $_[0];
     open FILE, $cur_file or die "unable to open $cur_file";
@@ -40,27 +40,27 @@ package Lexer {
     close FILE;
     $cur_line = 1;
   }
-  
+
   sub done() {
     return $#lines < 0;
   }
-  
+
   sub warn($$) {
     # TODO: avoid dups?
     print STDERR "warning: $_[0]->{file}:$_[0]->{line}: $_[1]\n";
   }
-  
+
   sub tok();  # To make compiler happy...
   sub tok() {
     # This code is intentionally simple.
-  
+
     my $line;
-  
+
     while(!$line) {
       return undef if(Lexer::done());
-  
+
       $line = shift @lines;
-  
+
       # Skip whites
       while(1) {
         next if($line =~ s/^[\s\r\n]+//m);
@@ -75,18 +75,18 @@ package Lexer {
         }
         last;
       }
-  
+
       if($line) {
         last;
       } else {
         ++$cur_line;
       }
     }
-  
+
     my $type;
     my $info = undef;
     my $nline = $cur_line;
-  
+
     # Useful ref: http://www.verilog.com/VerilogBNF.html
     if($line =~ s/^([a-zA-Z_\$.][a-zA-Z_\$.\d]*)//) {
       $info = $1;
@@ -113,13 +113,13 @@ package Lexer {
       $line = '';
     }
     print STDERR "$cur_file:$cur_line: token '$type'" . (defined $info ? " ($info)\n" : "\n") if($debug > 1);
-  
+
     if($line) {
       unshift @lines, $line;
     } else {
       ++$cur_line;
     }
-  
+
     return {
       type => $type,
       info => $info,
@@ -127,7 +127,7 @@ package Lexer {
       line => $nline
     };
   }
-  
+
   # Reads )-terminated, comma-separated list
   sub read_list() {
     my @elems;
