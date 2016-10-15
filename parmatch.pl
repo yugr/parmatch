@@ -90,7 +90,7 @@ package Lexer {
     # Useful ref: http://www.verilog.com/VerilogBNF.html
     if($line =~ s/^([a-zA-Z_\$.][a-zA-Z_\$.\d]*)//) {
       $info = $1;
-      $type = $info =~ /^(begin|end|(end)?(module|case)|type|parameter|localparam)$/ ? 'keyword'
+      $type = $info =~ /^(begin|end|(end)?(module|case)|type|parameter|localparam|real|integer|logic|wire|reg|assign|(pos|neg)edge)$/ ? 'keyword'
               : $info =~ /^\./ ? 'param_bind'
               : 'id';
       $info =~ s/^\.//;
@@ -271,7 +271,7 @@ sub find_modules() {
 }
 
 sub can_expect_mod_inst($) {
-  return ($_[0]->{type} eq 'keyword' && !is_module_tok($_[0]))
+  return ($_[0]->{type} eq 'keyword' && $_[0]->{info} =~ /begin|end/)
     || $_[0]->{type} eq ';';
 }
 
@@ -291,6 +291,7 @@ sub check_insts() {
     next if(!defined $l || !defined $l->{type});
 
     # Do not check for insts in bad contexts
+    # TODO: check that we don't loose anything useful compared to agressive mode
     if(!$aggress && !$check_mod_inst) {
       $check_mod_inst = can_expect_mod_inst($l);
       next;
@@ -364,7 +365,7 @@ GetOptions(
   'exclude=s@'      => \@excludes,
   'exclude-file=s@' => \@exclude_files,
   'debug+'          => \$debug,
-  'agressive-check' => $aggress
+  'aggress'         => $aggress
 );
 
 if($help) {
@@ -383,7 +384,7 @@ OPT can be one of
 
 Internal options (only for testing!):
   --debug
-  --agressive-check
+  --aggress
 EOF
   exit(0);
 }
