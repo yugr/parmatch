@@ -90,14 +90,14 @@ package Lexer {
     # Useful ref: http://www.verilog.com/VerilogBNF.html
     if($line =~ s/^([a-zA-Z_\$.][a-zA-Z_\$.\d]*)//) {
       $info = $1;
-      $type = $info =~ /^(begin|end|(end)?(module|case|generate)|type|parameter|localparam|real|integer|logic|wire|reg|assign|(pos|neg)edge)$/ ? 'keyword'
+      $type = $info =~ /^(begin|end|(end)?(module|case|generate)|parameter|localparam|type|real|integer|logic|wire|reg|(real)?time|assign|(pos|neg)edge)$/ ? 'keyword'
               : $info =~ /^\./ ? 'param_bind'
               : 'id';
       $info =~ s/^\.//;
     } elsif($line =~ s/^\\(\S+)\s//) {  # Escaped id
       $info = $1;
       $type = 'id';
-    } elsif($line =~ s/^([0-9'][0-9'bodhxzXZ_.]*)//) {
+    } elsif($line =~ s/^([0-9'][0-9'bBoOdDhHxXzZsS_.]*)//) {
       $info = $1;
       $type = 'number';
     } elsif($line =~ s/^#([0-9][0-9.]*)//) {
