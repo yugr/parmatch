@@ -1,0 +1,1 @@
+warning: tests/excessive-params/test.v:4: incompatible redefinition of module 'A': uses 2 parameters (used to be 3 in tests/excessive-params/test.v:1); the module will be excluded from further analysis
