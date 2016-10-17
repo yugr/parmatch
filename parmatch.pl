@@ -28,7 +28,9 @@ use Data::Dumper;
 
 my $debug = 0;
 
-package Lexer {
+{
+  package Lexer;
+
   my @lines;
   my $cur_file;
   my $cur_line;
@@ -393,7 +395,7 @@ EOF
 }
 
 if($#ARGV < 0) {
-  print STDERR "No root folders present at command line";
+  print STDERR "No root folders present at command line\n";
   exit(1);
 }
 
