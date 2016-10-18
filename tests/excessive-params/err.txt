@@ -1,1 +1,2 @@
-warning: tests/excessive-params/test.v:4: incompatible redefinition of module 'A': uses 2 parameters (used to be 3 in tests/excessive-params/test.v:1); the module will be excluded from further analysis
+warning: tests/excessive-params/test.v:4: incompatible redefinition of module 'A' (previously defined at tests/excessive-params/test.v:1); following parameters will not be analyzed:
+  missing parameters: C 

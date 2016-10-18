@@ -15,7 +15,7 @@ for d in tests/*; do
     ./parmatch.pl $d >$tmp.out 2>$tmp.err
     if ! diff -q $d/out.txt $tmp.out; then
       echo >&2 "$d: stdout comparison failed:"
-      diff -u $d/out.txt $tmp.out
+      diff -u $d/out.txt $tmp.out || true
       fail=1
     fi
     if test -f $d/err.txt; then
@@ -25,7 +25,7 @@ for d in tests/*; do
     fi
     if ! diff -q $stderr $tmp.err; then
       echo >&2 "$d: stderr comparison failed"
-      diff -u $stderr $tmp.err
+      diff -u $stderr $tmp.err || true
       fail=1
     fi
   fi

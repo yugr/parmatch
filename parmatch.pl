@@ -235,45 +235,74 @@ sub find_modules() {
       }
     }
 
-    if(exists $mod2info{$mod_name}) {
-      # It's common for single codebase to have
-      # several implementations of same module.
-      # It's fine if their signature match.
-      # If they don't, we warn user and ignore
-      # such module.
-
-      my $prev = $mod2info{$mod_name};
-      my $mod_loc = "$prev->{tok}->{file}:$prev->{tok}->{line}";
-
-      my $prev_npars = @{$prev->{pars}};
-      my $npars = @pars;
-
-      if($prev_npars != $npars) {
-        Lexer::warn($mod, "incompatible redefinition of module '$mod_name': uses $npars parameters (used to be $prev_npars in $mod_loc); the module will be excluded from further analysis");
-        $prev->{ignore} = 1;
-        next;
-      }
-
-      for(my $i = 0; $i < $npars; ++$i) {
-        my $prev_par = $prev->{pars}->[$i];
-        my $par = $pars[$i];
-        if($prev_par ne $par) {
-          # TODO: we can at least check common part of the interface
-          Lexer::warn($mod, "incompatible redefinition of module '$mod_name': $i-th parameter is named '$par' (used to be '$prev_par' in $mod_loc); the module will be excluded from further analysis");
-          $prev->{ignore} = 1;
-          last;
-        }
-      }
-
-      next if($prev->{ignore});
+    if(!exists $mod2info{$mod_name}) {
+      $mod2info{$mod_name} = {
+        tok => $mod,
+        pars => \@pars,
+        hash => \%pars_hash,
+        warned => 0,
+        ignore_pos => 0
+      };
+      next;
     }
 
-    $mod2info{$mod_name} = {
-      pars => \@pars,
-      tok => $mod,
-      pars_hash => \%pars_hash,
-      ignore => 0
-    };
+    # It's common for single codebase to have
+    # several implementations of same module.
+    # It's fine if their signature match.
+    # If they don't, we warn user and ignore
+    # such module.
+
+    my $prev = $mod2info{$mod_name};
+    my $prev_mod_loc = "$prev->{tok}->{file}:$prev->{tok}->{line}";
+    my $prev_pars = $prev->{pars};
+    my $prev_npars = @$prev_pars;
+    my $prev_hash = $prev->{hash};
+
+    my $npars = @pars;
+
+    # First check pars that were not seen in previous def
+    my @new_pars;
+    for(my $i = 0; $i < $npars; ++$i) {
+      my $par = $pars[$i];
+      if(!exists $prev_hash->{$par}) {
+        push @new_pars, $par;
+        $prev->{ignore_pos} = 1;
+      }
+    }
+
+    # Check missing pars
+    my @miss_pars;
+    for(my $i = 0; $i < $prev_npars; ++$i) {
+      my $par = $prev_pars->[$i];
+      if(defined $par && !exists $pars_hash{$par}) {
+        push @miss_pars, $par;
+        $prev->{ignore_pos} = 1;
+        $prev_pars->[$i] = undef;
+        delete $prev_hash->{$par};
+      }
+    }
+
+    # Finally check for reordered pars (as these would prevent
+    # analysis of positional params)
+    my @reorder_pars;
+    for(my $i = 0; $i < $npars; ++$i) {
+      my $par = $pars[$i];
+      if(exists $prev_hash->{$par}) {
+        my $prev_par = $prev_pars->[$i];
+        if(defined $prev_par && $par ne $prev_par) {
+          push @reorder_pars, $par;
+          $prev->{ignore_pos} = 1;
+        }
+      }
+    }
+
+    # TODO: disable further analysis of module if changes are too large?
+    if(!$prev->{warned} && (@new_pars || @miss_pars)) {
+      print STDERR "warning: $mod_loc: incompatible redefinition of module '$mod_name' (previously defined at $prev_mod_loc); following parameters will not be analyzed:\n";
+      print STDERR "  newly added parameters: @new_pars \n" if(@new_pars);
+      print STDERR "  missing parameters: @miss_pars \n" if(@miss_pars);
+      $prev->{warned} = 1;
+    }
   }
 }
 
@@ -331,30 +360,34 @@ sub check_insts() {
     my $mod_pars = $mod_info->{pars};
     my $mod_loc = "$mod_info->{tok}->{file}:$mod_info->{tok}->{line}";
 
-    if(scalar @pars > scalar @$mod_pars) {
+    if(!$mod_info->{warned} && scalar @pars > scalar @$mod_pars) {
       Lexer::warn($l, sprintf("no. of instantiation parameters (%d) > no. of defined parameters (%d) in module '$name' (defined at $mod_loc)", scalar @pars, scalar @$mod_pars)) if(!$verbose);
       next;
     }
 
     my %binds;
+    my $pos_params = 0;
     for(my $i = 0; $i < @pars; ++$i) {
       my $par = $pars[$i];
       if(!defined $par) {
         # Positional param
         $binds{$mod_pars->[$i]} = 1;
+        $pos_params = 1;
       } else {
         # Named param
         $binds{$par} = 1;
-        if(!exists $mod_info->{pars_hash}->{$par}) {
+        if(!exists $mod_info->{hash}->{$par}) {
           # See above warning.
           Lexer::warn($l, "named parameter '$par' missing in module '$name' (defined at $mod_loc)") if(!$verbose);
         }
       }
     }
 
+    next if($pos_params && $mod_info->{ignore_pos});
+
     # TODO: cumulated report for all params
     foreach my $par (@$mod_pars) {
-      if(!exists $binds{$par}) {
+      if(defined $par && !exists $binds{$par}) {
         print "$loc: parameter '$par' not assigned in instantiation of module '$name' (defined at $mod_loc)\n";
       }
     }
