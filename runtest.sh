@@ -12,7 +12,11 @@ for d in tests/*; do
     out=$d.out
     err=$d.err
     echo "Testing $d..."
-    ./parmatch.pl $d >$tmp.out 2>$tmp.err
+    if test -f $d/file-list.txt; then
+      ./parmatch.pl $d/file-list.txt >$tmp.out 2>$tmp.err
+    else
+      ./parmatch.pl $d >$tmp.out 2>$tmp.err
+    fi
     if ! diff -q $d/out.txt $tmp.out; then
       echo >&2 "$d: stdout comparison failed:"
       diff -u $d/out.txt $tmp.out || true

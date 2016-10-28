@@ -195,11 +195,20 @@ sub is_excluded($) {
   return 0;
 }
 
-sub find_modules() {
-  return if (!is_verilog_file($File::Find::name));
-  return if (is_excluded($File::Find::name));
-  print "Scanning $File::Find::name for module definitions...\n";
-  Lexer::init($_);
+my @verilog_files;
+
+sub find_verilog_files() {
+  if(is_verilog_file($File::Find::name)
+     && !is_excluded($File::Find::name)) {
+    push @verilog_files, $File::Find::name;
+  }
+}
+
+sub find_defs($) {
+  my $file = $_[0];
+  print "Scanning $file for module definitions...\n";
+
+  Lexer::init($file);
   while(!Lexer::done()) {
     my $l = Lexer::tok();
     next if(!is_module_tok($l));
@@ -211,7 +220,7 @@ sub find_modules() {
     next if(!maybe_read_param_lparen());
 
     my @par_list = Lexer::read_list();
-    print STDERR "$mod_loc: find_modules: module params:\n" . Dumper(@par_list) if($debug);
+    print STDERR "$mod_loc: find_defs module params:\n" . Dumper(@par_list) if($debug);
 
     # Analyze pars
     my @pars;
@@ -314,12 +323,11 @@ sub can_expect_mod_inst($) {
 my $verbose = 0;
 my $aggress = 0;
 
-sub check_insts() {
-  return if (!is_verilog_file($File::Find::name));
-  return if (is_excluded($File::Find::name));
-  print "Scanning $File::Find::name for module instantiations...\n";
-  Lexer::init($_);
+sub check_insts($) {
+  my $file = $_[0];
+  print "Scanning $file for module instantiations...\n";
 
+  Lexer::init($file);
   my $check_mod_inst = 1;
   while(!Lexer::done()) {
     my $l = Lexer::tok();
@@ -401,7 +409,7 @@ GetOptions(
   'help'            => \$help,
   'verbose+'        => \$verbose,
   'exclude=s@'      => \@excludes,
-  'exclude-file=s@' => \@exclude_files,
+  'exclude-from=s@' => \@exclude_files,
   'debug+'          => \$debug,
   'aggress'         => $aggress
 );
@@ -413,11 +421,14 @@ Usage: parmatch.pl [OPT]... ROOT...
 A sloppy script for finding unbound parameters in
 Verilog module instantiations.
 
+ROOT is either a folder or file with names of Verilog files to
+analyze.
+
 OPT can be one of
   --help                     Print this help and exit.
   --verbose                  Show more warning.
   --exclude=GLOB             Exclude files whose names match wildcard.
-  --exclude-file=GLOB_FILE   Exclude files whose names match patterns
+  --exclude-from=GLOB_FILE   Exclude files whose names match patterns
                              in file.
 
 Internal options (only for testing!):
@@ -445,8 +456,32 @@ foreach my $f (@exclude_files) {
 # Poor man's wildcards...
 @excludes = map { s/\*/.*/g; s/\./\\./; s/\?/./; $_ } @excludes;
 
-find({ wanted => \&find_modules, no_chdir => 1 }, @roots);
-find({ wanted => \&check_insts, no_chdir => 1 }, @roots);
+foreach my $root (@roots) {
+  if(-d $root) {
+    find({ wanted => \&find_verilog_files, no_chdir => 1}, $root);
+  } else {
+    open ROOT, $root or die "unable to open file $root";
+    while(<ROOT>) {
+      chop;
+      if(!-f $_) {
+        print STDERR "File not found: '$_'\n";
+      } elsif(!is_verilog_file($_)) {
+        print STDERR "File '$root' does not look like a Verilog file";
+      } else {
+        push @verilog_files, $_;
+      }
+    }
+    close ROOT;
+  }
+}
+
+foreach my $file (@verilog_files) {
+  find_defs($file);
+}
+
+foreach my $file (@verilog_files) {
+  check_insts($file);
+}
 
 # TODO: print summary?
 
